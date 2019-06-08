@@ -63,6 +63,7 @@ class HyperpartisanNewsRandomPredictor(xml.sax.ContentHandler):
     def startElement(self, name, attrs):
         if name == "article":
             articleId = attrs.getValue("id") # id of the article for which hyperpartisanship should be predicted
+            print(self)
             prediction = random.choice(["true", "false"]) # random prediction
             confidence = random.random() # random confidence value for prediction
             # output format per line: "<article id> <prediction>[ <confidence>]"
