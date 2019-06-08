@@ -1,12 +1,9 @@
-# Author: Olivier Grisel <olivier.grisel@ensta.org>
-#         Peter Prettenhofer <peter.prettenhofer@gmail.com>
-#         Mathieu Blondel <mathieu@mblondel.org>
-# License: BSD 3 clause
-from pprint import pprint
+# Author: Daan Middendorp <d.middendorp@campus.tu-berlin.de>
+
 from time import time
 import logging
-import xmltodict
 import xml.etree.ElementTree as ET
+import math
 
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import CountVectorizer
@@ -14,52 +11,25 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.linear_model import SGDClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
-import xml.sax
-
-print(__doc__)
 
 # Display progress logs on stdout
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(message)s')
 
-
-# #############################################################################
-# Load some categories from the training set
 categories = [
     'hyperpartisan',
     'non-hyperpartisan',
 ]
-# Uncomment the following to do the analysis on all the categories
-#categories = None
 
-print(categories)
-
-data = list(),
 articles = []
-targets = []
-hyperpartisan = []
-filenames = [],
-target_names  = [
-  'hyperpartisan',
-  'non-hyperpartisan',
-]
+target_category = []
 
-
-print("%d documents" % len(filenames))
-print("%d categories" % len(target_names))
-print()
-
-# #############################################################################
-# Define a pipeline combining a text feature extractor with a simple
-# classifier
 pipeline = Pipeline([
     ('vect', CountVectorizer()),
     ('tfidf', TfidfTransformer()),
     ('clf', SGDClassifier(tol=1e-3)),
 ])
 
-# uncommenting more parameters will give better exploring power but will
-# increase processing time in a combinatorial way
 parameters = {
     'vect__max_df': (0.5, 0.75, 1.0),
     # 'vect__max_features': (None, 5000, 10000, 50000),
@@ -72,6 +42,8 @@ parameters = {
     # 'clf__max_iter': (10, 50, 80),
 }
 
+validation_percentage = 0.2
+
 if __name__ == "__main__":
 
     tree = ET.parse('data/articles-training-byarticle-20181122.xml')
@@ -80,17 +52,23 @@ if __name__ == "__main__":
 
     truth = ET.parse('data/ground-truth-training-byarticle-20181122.xml')
     for country in truth.findall('article'):
-        hyperpartisan.append(1 if country.get('hyperpartisan') == 'true' else 0)
+        target_category.append(1 if country.get('hyperpartisan') == 'true' else 0)
+
+    validation_len = math.floor(len(articles)*validation_percentage)
+    training_len = len(articles)-validation_len
+
+    train_articles = articles[:training_len]
+    train_hyperpartisan = target_category[:training_len]
+    validation_articles = articles[validation_len*-1:]
+    validation_hyperpartisan = target_category[validation_len*-1:]
 
     grid_search = GridSearchCV(pipeline, parameters, cv=5,
                                n_jobs=-1, verbose=1)
 
     print("Performing grid search...")
     print("pipeline:", [name for name, _ in pipeline.steps])
-    print("parameters:")
-    pprint(parameters)
     t0 = time()
-    grid_search.fit(articles, hyperpartisan)
+    grid_search.fit(train_articles, train_hyperpartisan)
     print("done in %0.3fs" % (time() - t0))
     print()
 
@@ -99,3 +77,10 @@ if __name__ == "__main__":
     best_parameters = grid_search.best_estimator_.get_params()
     for param_name in sorted(parameters.keys()):
         print("\t%s: %r" % (param_name, best_parameters[param_name]))
+
+
+    prediction = grid_search.predict(validation_articles)
+
+    correct = (prediction == validation_hyperpartisan)
+    accuracy = correct.sum() / correct.size
+    print(accuracy)
