@@ -7,10 +7,15 @@ from spacy.lang.en import English
 import string
 
 from sklearn.base import TransformerMixin
-from sklearn.pipeline import Pipeline
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.pipeline import Pipeline, FeatureUnion
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.linear_model import LogisticRegressionCV, SGDClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import MultinomialNB
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, GridSearchCV
+from sklearn.preprocessing import FunctionTransformer 
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.svm import LinearSVC
 from sklearn import metrics
 
 from keras.models import Model
@@ -19,11 +24,12 @@ from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 from keras.wrappers.scikit_learn import KerasClassifier
 
-
 import matplotlib.pyplot as plt
-#plt.style.use('ggplot')
 
 import logging
+import os
+import numpy as np
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
 def parse_articles(filepath):
@@ -40,7 +46,7 @@ def parse_articles(filepath):
             if text_node.tag == 'p':
                 if text_node.text is not None:
                     text += text_node.text
-        article['content'] = text
+        article['content'] = text + child.attrib['title']
         articles.append(article)
     return clean_articles(articles)
 
@@ -68,7 +74,6 @@ def tokenizer(sentence):
     tokens = [word.lemma_.lower().strip() if word.lemma_ != "-PRON-" else word.lower_ for word in tokens]
     # Remove stop words and punctuation
     tokens = [word for word in tokens if word not in stop_words and word not in punctuations]
-
     return tokens
 
 # Custom transformer using spaCy
@@ -163,17 +168,47 @@ X = articles['content']
 ylabels = articles['hyperpartisan']
 X_train, X_test, y_train, y_test = train_test_split(X, ylabels, test_size=0.25)
 
+hyper = []
+nonhyper = []
+
+for i in range(len(articles['content'])):
+    if ylabels[i] == 1:
+        hyper.append(len(articles['content'][i].split()))
+    else:
+        nonhyper.append(len(articles['content'][i].split()))
+
+print(np.mean(hyper))
+print(np.mean(nonhyper))
+
 
 bow_vectorizer = CountVectorizer(tokenizer=tokenizer, ngram_range=(1,1))
 
 #---------------------------------
 #LogisticRegression
 
+
+
+def get_text_length(x):
+    return np.array([len(t) for t in x]).reshape(-1, 1)
+
+
 classifier = LogisticRegressionCV(cv=5)
 
-baseline = Pipeline([("cleaner", transformer()),("vectorizer", bow_vectorizer), ("classifier", classifier)])
+baseline = Pipeline([
+    ('features', FeatureUnion([
+        ('text', Pipeline([
+            ('vectorizer', bow_vectorizer),
+            ('tfidf', TfidfTransformer()),
+        ])),
+        ('length', Pipeline([
+            ('count', FunctionTransformer(get_text_length, validate=False)),
+        ]))
+    ])),
+    ('clf', LogisticRegressionCV(cv=5))])
+
 baseline.fit(X_train, y_train)
 prediction = baseline.predict(X_test)
+print("Logistic Regression")
 print("Accuracy: ", metrics.accuracy_score(y_test, prediction))
 print("Precision: ", metrics.precision_score(y_test, prediction))
 print("Recall: ", metrics.recall_score(y_test, prediction))
@@ -186,11 +221,39 @@ sgd_clf = SGDClassifier(l1_ratio=0.15)
 sgd_base = Pipeline([("cleaner", transformer()),("vectorizer", bow_vectorizer), ("classifier", sgd_clf)])
 sgd_base.fit(X_train, y_train)
 prediction = sgd_base.predict(X_test)
+print("SGD Classifier")
+print("Accuracy: ", metrics.accuracy_score(y_test, prediction))
+print("Precision: ", metrics.precision_score(y_test, prediction))
+print("Recall: ", metrics.recall_score(y_test, prediction))
+print("F1 Score: ", metrics.f1_score(y_test, prediction))
+
+#-----------------------------------------
+#Random Forest Classifier
+
+rf_clf = RandomForestClassifier()
+rf_base = Pipeline([("cleaner", transformer()),("vectorizer", bow_vectorizer), ("classifier", rf_clf)])
+rf_base.fit(X_train, y_train)
+prediction = rf_base.predict(X_test)
+print("Random Forest Classifier")
+print("Accuracy: ", metrics.accuracy_score(y_test, prediction))
+print("Precision: ", metrics.precision_score(y_test, prediction))
+print("Recall: ", metrics.recall_score(y_test, prediction))
+print("F1 Score: ", metrics.f1_score(y_test, prediction))
+
+#-----------------------------------------
+#Naive Bayes Classifier
+
+nb_clf = MultinomialNB()
+nb_base = Pipeline([("cleaner", transformer()),("vectorizer", bow_vectorizer), ("classifier", nb_clf)])
+nb_base.fit(X_train, y_train)
+prediction = nb_base.predict(X_test)
+print("Naive Base Classifier")
 print("Accuracy: ", metrics.accuracy_score(y_test, prediction))
 print("Precision: ", metrics.precision_score(y_test, prediction))
 print("Recall: ", metrics.recall_score(y_test, prediction))
 print("F1 Score: ", metrics.f1_score(y_test, prediction))
 #-----------------------------------------
+
 
 tokenizer = Tokenizer(num_words=5000)
 tokenizer.fit_on_texts(X_train)
