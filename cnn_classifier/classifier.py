@@ -28,24 +28,26 @@ argparser.add_argument('--elmo', help="use elmo embeddings", action='store_true'
 args = argparser.parse_args()
 
 seed=42
-
-articles = parse_to_df("../data/articles-training-byarticle-20181122.xml", "../data/ground-truth-training-byarticle-20181122.xml")
+byart_tuple = ("../data/articles-training-byarticle-20181122.xml", "../data/ground-truth-training-byarticle-20181122.xml")
+#bypub_tuple = ("../data/bypub-short.xml", "../data/ground-truth-training-bypublisher-20181122.xml")
+#articles = parsemix_bp_ba_to_df(byart_tuple, bypub_tuple, cutoff=1000)
+articles = parse_to_df(byart_tuple[0], byart_tuple[1])
 
 X = articles['content']
 ylabels = articles['hyperpartisan']
-X_train, X_test, y_train, y_test = train_test_split(X, ylabels, test_size=0.25, random_state=seed)
+X_train, X_test, y_train, y_test = train_test_split(X, ylabels, test_size=0.2, random_state=seed)
 
 
-'''
+
 bow_vectorizer = CountVectorizer(tokenizer=tokenizer, ngram_range=(1,1))
 #---------------------------------
 #LogisticRegressionCV
 
-classifier = LogisticRegressionCV(cv=5)
---
+classifier = LogisticRegressionCV(cv=4)
 baseline = Pipeline([("cleaner", transformer()),("vectorizer", bow_vectorizer), ("classifier", classifier)])
 baseline.fit(X_train, y_train)
 prediction = baseline.predict(X_test)
+print("LogisticRegression:")
 print("Accuracy: ", metrics.accuracy_score(y_test, prediction))
 print("Precision: ", metrics.precision_score(y_test, prediction))
 print("Recall: ", metrics.recall_score(y_test, prediction))
@@ -58,12 +60,13 @@ sgd_clf = SGDClassifier(l1_ratio=0.15)
 sgd_base = Pipeline([("cleaner", transformer()),("vectorizer", bow_vectorizer), ("classifier", sgd_clf)])
 sgd_base.fit(X_train, y_train)
 prediction = sgd_base.predict(X_test)
+print("SGDClassifier:")
 print("Accuracy: ", metrics.accuracy_score(y_test, prediction))
 print("Precision: ", metrics.precision_score(y_test, prediction))
 print("Recall: ", metrics.recall_score(y_test, prediction))
 print("F1 Score: ", metrics.f1_score(y_test, prediction))
 #-----------------------------------------
-'''
+
 
 X_train = X_train.apply(normalize, lowercase=True, remove_stopwords=True)
 X_test = X_test.apply(normalize, lowercase=True, remove_stopwords=True)
@@ -89,11 +92,11 @@ if not args.elmo:
 
 # Param Grid
 param_grid = dict(num_filters=[128],
-        kernel_size=[7],
+        kernel_size=[5],
         vocab_size=[vocab_size],
         embedding_dim=[100],
         maxlen=[maxlen],
-        drop_rate=[0.4])
+        drop_rate=[0.3])
 
 if args.elmo:
     model = KerasClassifier(build_fn=create_elmo_model, epochs=epochs, batch_size=10, verbose=False)
@@ -107,9 +110,10 @@ rando = RandomizedSearchCV(estimator=model, param_distributions=param_grid, cv=4
 rando_result = rando.fit(X_train, y_train)
 
 prediction_r = rando.predict(X_test)
+print("CNN Classifier:")
 print("Accuracy: ", metrics.accuracy_score(y_test, prediction_r))
 print("Precision: ", metrics.precision_score(y_test, prediction_r))
 print("Recall: ", metrics.recall_score(y_test, prediction_r))
 print("F1 Score: ", metrics.f1_score(y_test, prediction_r))
-print("Best params: ", rando.best_params_)
+#print("Best params: ", rando.best_params_)
 

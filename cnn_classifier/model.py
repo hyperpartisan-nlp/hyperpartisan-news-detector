@@ -55,7 +55,7 @@ def create_model(num_filters, kernel_size, vocab_size, embedding_dim, maxlen, dr
 
     #x = layers.BatchNormalization()(layers.Activation('relu')(layers.Conv1D(num_filters, kernel_size)(embedded_seq)))
     x = layers.Activation('relu')(layers.BatchNormalization()(layers.Conv1D(num_filters, kernel_size)(embedded_seq)))
-    x = layers.Dropout(drop_rate)(layers.MaxPooling1D()(x))
+    x = layers.Dropout(drop_rate)(layers.MaxPooling1D(pool_size=3)(x))
     #x = layers.MaxPooling1D()(x)
 
     #x = layers.BatchNormalization()(layers.Activation('relu')(layers.Conv1D(num_filters, kernel_size)(embedded_seq)))
@@ -68,7 +68,7 @@ def create_model(num_filters, kernel_size, vocab_size, embedding_dim, maxlen, dr
     x = layers.Dropout(drop_rate)(layers.GlobalMaxPool1D()(x))
     #x = layers.GlobalMaxPool1D()(x)
 
-    x = layers.Dropout(drop_rate)(layers.Dense(num_filters, activation='relu')(x))
+    x = layers.Dropout(drop_rate)(layers.Dense(256, activation='relu')(x))
     out = layers.Dense(1, activation='sigmoid')(x)
 
     model = Model(seq_input, out)

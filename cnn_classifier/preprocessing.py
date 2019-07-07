@@ -26,14 +26,15 @@ def clean_articles(articles):
         article['content'] = clean_content(article['content'], h)
     return articles
 
-def parse_articles(filepath):
+def parse_articles(filepath, counter=1000):
     ''' Parse article file and convert into mapping.'''
     tree = ET.parse(filepath)
     root = tree.getroot()
 
     articles = []
     for child in root:
-        #print(child.attrib)
+        if counter == 0:
+            break
         article = {'id' : child.attrib['id']}
         text = ""
         for text_node in child:
@@ -42,6 +43,7 @@ def parse_articles(filepath):
                     text += text_node.text
         article['content'] = text
         articles.append(article)
+        counter -= 1
     return clean_articles(articles)
 
 def parse_hyperpartisan(filepath):
@@ -79,6 +81,14 @@ def normalize(comment, lowercase, remove_stopwords):
             if not remove_stopwords or (remove_stopwords and lemma not in stop_words):
                 lemmatized.append(lemma)
     return " ".join(lemmatized)
+
+def parsemix_bp_ba_to_df(byart_tuple, bypub_tuple, cutoff=1000):
+    byarticle = parse_to_df(byart_tuple[0], byart_tuple[1])
+    bypublisher = parse_to_df(bypub_tuple[0], bypub_tuple[1])
+    #bypublisher.drop(range(cutoff))
+    data = byarticle.append(bypublisher)
+    return data
+
 
 def tokenizer(sentence):
     """ Tokenizes a sentence. """
